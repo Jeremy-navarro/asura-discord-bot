@@ -1,4 +1,3 @@
-
 from configuracion.config import (
     EVENT_WINDOW_MINUTES,
     RIFT_INTERVAL_MINUTES,
@@ -51,14 +50,14 @@ def event_time_description(event):
 
     if difference < 0:
         return (
-            f"faltan aproximadamente "
-            f"{abs(difference):.1f} min"
+            f"approximately "
+            f"{abs(difference):.1f} min remaining"
         )
 
     if difference > 0:
         return (
-            f"pasó el punto previsto hace "
-            f"{difference:.1f} min"
+            f"scheduled time passed "
+            f"{difference:.1f} min ago"
         )
 
-    return "en el punto previsto"
+    return "at the scheduled time"

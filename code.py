@@ -2,6 +2,7 @@ import aiohttp
 import discord
 
 from datetime import datetime, timezone
+from pathlib import Path
 from discord.ext import commands, tasks
 
 from configuracion.config import (
@@ -48,15 +49,22 @@ from apis.events import (
 
 
 # ============================================================
-# CONFIGURACIÓN DE MENCIONES
+# PATHS
 # ============================================================
 
-# ID del rol que recibirá las notificaciones RIFT y BOSS.
-ALERT_ROLE_ID = 1559554951057776690
+BASE_DIR = Path(__file__).resolve().parent
+GIF_PATH = BASE_DIR / "gang.png"
 
 
 # ============================================================
-# UTILIDADES
+# ALERT ROLE CONFIGURATION
+# ============================================================
+
+ALERT_ROLE_ID = 1561702759550689411
+
+
+# ============================================================
+# UTILITIES
 # ============================================================
 
 def utc_now():
@@ -106,26 +114,22 @@ boss_channel = None
 
 
 # ============================================================
-# BOTÓN PARA UNIRSE AL SERVIDOR
+# JOIN SERVER BUTTON
 # ============================================================
 
 def create_server_view(
     invite_url: str,
 ) -> discord.ui.View:
-    """
-    Crea un botón que utiliza exclusivamente la invitación
-    corta generada por RoQoL.
-    """
 
     if not invite_url.startswith("https://roqol.io/i/"):
         raise ValueError(
-            "La invitación no es una URL válida de RoQoL."
+            "The invitation is not a valid RoQoL URL."
         )
 
     view = discord.ui.View(timeout=None)
 
     button = discord.ui.Button(
-        label="🎮 Unirse al servidor",
+        label="🎮 Join Server",
         style=discord.ButtonStyle.link,
         url=invite_url,
     )
@@ -136,7 +140,7 @@ def create_server_view(
 
 
 # ============================================================
-# ESCANEO DE SERVIDORES
+# SERVER SCANNING
 # ============================================================
 
 @tasks.loop(seconds=SCAN_SECONDS)
@@ -160,19 +164,19 @@ async def scan_servers():
         )
 
         print(
-            f"[Escaneo] {len(current_ids)} servidores "
-            "públicos encontrados."
+            f"[Scan] Found {len(current_ids)} "
+            "public servers."
         )
 
     except IncompleteServerScan as error:
         print(
-            f"[Escaneo incompleto] {error}. "
-            "Se conservan los estados anteriores."
+            f"[Incomplete Scan] {error}. "
+            "Previous server states will be preserved."
         )
 
     except Exception as error:
         print(
-            f"[Escaneo] Error inesperado: {error}"
+            f"[Scan] Unexpected error: {error}"
         )
 
 
@@ -182,14 +186,15 @@ async def before_scan_servers():
 
 
 # ============================================================
-# ALERTAS DE RIFT Y BOSS
+# RIFT AND BOSS ALERTS
 # ============================================================
 
 @tasks.loop(seconds=REPORT_SECONDS)
 async def send_event_alerts():
+
     if rift_channel is None and boss_channel is None:
         print(
-            "[Discord] No hay canales de alertas disponibles."
+            "[Discord] No alert channels are available."
         )
         return
 
@@ -209,7 +214,7 @@ async def send_event_alerts():
 
         for job_id, info in tracked.items():
 
-            # Solo alertar si el servidor sigue público.
+            # Only alert for servers that are still public.
             if job_id not in current_ids:
                 continue
 
@@ -231,7 +236,7 @@ async def send_event_alerts():
                 event_name = event["name"]
                 cycle = event["cycle"]
 
-                # Seleccionar el canal correspondiente.
+                # Select the appropriate notification channel.
                 if event_name == "RIFT":
                     target_channel = rift_channel
 
@@ -240,19 +245,18 @@ async def send_event_alerts():
 
                 else:
                     print(
-                        f"[Alertas] Evento desconocido: "
-                        f"{event_name}"
+                        f"[Alerts] Unknown event: {event_name}"
                     )
                     continue
 
                 if target_channel is None:
                     print(
-                        f"[Discord] No hay canal disponible "
-                        f"para {event_name}."
+                        f"[Discord] No channel available "
+                        f"for {event_name}."
                     )
                     continue
 
-                # Evitar duplicados del mismo ciclo.
+                # Prevent duplicate alerts for the same cycle.
                 if alert_was_sent(
                     job_id,
                     event_name,
@@ -260,7 +264,7 @@ async def send_event_alerts():
                 ):
                     continue
 
-                # Obtener la invitación ANTES de enviar.
+                # Obtain the RoQoL invitation.
                 try:
                     invite_url = await get_roqol_invite(
                         bot.http_session,
@@ -269,37 +273,35 @@ async def send_event_alerts():
 
                 except Exception as error:
                     print(
-                        f"[RoQoL] Error generando invitación "
-                        f"para {job_id}: {error}"
+                        f"[RoQoL] Failed to generate an "
+                        f"invitation for {job_id}: {error}"
                     )
                     continue
 
-                # Sin invitación de RoQoL no se publica
-                # un botón alternativo potencialmente impreciso.
                 if not invite_url:
                     print(
-                        f"[RoQoL] No se obtuvo invitación "
-                        f"para {job_id}. "
-                        f"Se reintentará en la siguiente revisión."
+                        f"[RoQoL] No invitation obtained for "
+                        f"{job_id}. Retrying on the next check."
                     )
                     continue
 
                 print(
-                    f"[RoQoL] Invitación obtenida para "
+                    f"[RoQoL] Invitation obtained for "
                     f"{job_id}: {invite_url}"
                 )
 
+                # Create the alert embed.
                 embed = discord.Embed(
-                    title=f"⚔️ ASURA — {event_name} próximo",
+                    title=f"⚔️ ASURA — Upcoming {event_name}",
                     description=(
-                        f"**Servidor:** `{job_id}`\n"
-                        f"**Desde primera detección de RoValra:** "
+                        f"**Server ID:** `{job_id}`\n"
+                        f"**Server Age:** "
                         f"{format_age(age_seconds)}\n"
-                        f"**Evento estimado:** {event_name}\n"
-                        f"**Ciclo:** #{cycle}\n"
-                        f"**Tiempo estimado:** "
+                        f"**Estimated Event:** {event_name}\n"
+                        f"**Cycle:** #{cycle}\n"
+                        f"**Estimated Time:** "
                         f"{event_time_description(event)}\n"
-                        f"**Jugadores:** "
+                        f"**Players:** "
                         f"{server['playing']}/{server['max']}"
                     ),
                     color=(
@@ -310,11 +312,15 @@ async def send_event_alerts():
                     timestamp=utc_now(),
                 )
 
+                # Attach the local GIF to the embed.
+                embed.set_thumbnail(
+                    url="attachment://gang.png"
+                )
+
                 embed.set_footer(
                     text=(
-                        "Antigüedad basada en first_seen de "
-                        "RoValra. No confirma la aparición "
-                        "real del evento."
+                        "Event timing is estimated "
+                        "and not guaranteed."
                     )
                 )
 
@@ -323,18 +329,32 @@ async def send_event_alerts():
                         invite_url
                     )
 
-                    # Mencionar al rol en cada alerta.
+                    # Create a fresh file for each alert.
+                    # This prevents issues when multiple
+                    # alerts are sent during the same scan.
+                    if not GIF_PATH.is_file():
+                        print(
+                            f"[GIF] File not found: {GIF_PATH}"
+                        )
+                        continue
+
+                    file = discord.File(
+                        str(GIF_PATH),
+                        filename=".gang.png",
+                    )
+
+                    # Mention the alert role and send the GIF.
                     await target_channel.send(
                         content=f"<@&{ALERT_ROLE_ID}>",
                         embed=embed,
                         view=view,
+                        file=file,
                         allowed_mentions=discord.AllowedMentions(
                             roles=True
                         ),
                     )
 
-                    # Registrar el envío solo si Discord
-                    # confirma que el mensaje se publicó.
+                    # Record the alert only after successful send.
                     mark_alert_sent(
                         job_id,
                         event_name,
@@ -342,33 +362,33 @@ async def send_event_alerts():
                     )
 
                     print(
-                        f"[Alerta] {event_name} enviada a "
+                        f"[Alert] {event_name} sent to "
                         f"#{target_channel.name} | "
-                        f"servidor {job_id} | "
-                        f"ciclo {cycle} | "
-                        f"rol mencionado: {ALERT_ROLE_ID}"
+                        f"Server: {job_id} | "
+                        f"Cycle: {cycle} | "
+                        f"Role mentioned: {ALERT_ROLE_ID}"
                     )
 
                 except discord.HTTPException as error:
                     print(
-                        f"[Discord] No se pudo enviar "
-                        f"{event_name} a su canal: {error}"
+                        f"[Discord] Failed to send "
+                        f"{event_name} to its channel: {error}"
                     )
 
                 except Exception as error:
                     print(
-                        f"[Alertas] Error procesando "
-                        f"{event_name} para {job_id}: {error}"
+                        f"[Alerts] Error processing "
+                        f"{event_name} for {job_id}: {error}"
                     )
 
     except IncompleteServerScan as error:
         print(
-            f"[Alertas] Escaneo incompleto: {error}"
+            f"[Alerts] Incomplete server scan: {error}"
         )
 
     except Exception as error:
         print(
-            f"[Alertas] Error inesperado: {error}"
+            f"[Alerts] Unexpected error: {error}"
         )
 
 
@@ -378,15 +398,14 @@ async def before_send_event_alerts():
 
 
 # ============================================================
-# COMANDO: !probar_edad
+# COMMAND: !test_age
 # ============================================================
 
-@bot.command(name="probar_edad")
-async def probar_edad(ctx, job_id: str):
+@bot.command(name="test_age")
+async def test_age(ctx, job_id: str):
 
     message = await ctx.send(
-        "Consultando la primera detección del servidor "
-        "en RoValra..."
+        "Checking the server's first detection on RoValra..."
     )
 
     age_seconds = await rovalra.fetch_server_age(
@@ -397,10 +416,11 @@ async def probar_edad(ctx, job_id: str):
     if age_seconds is None:
         await message.edit(
             content=(
-                "No se pudo obtener una antigüedad válida "
-                "desde RoValra.\n"
-                "Puede haber un límite HTTP 429 o faltar "
-                "first_seen. Revisa la consola."
+                "Could not retrieve a valid server age "
+                "from RoValra.\n"
+                "An HTTP 429 rate limit may have occurred, "
+                "or first_seen may be missing. "
+                "Check the console for details."
             )
         )
         return
@@ -426,76 +446,77 @@ async def probar_edad(ctx, job_id: str):
         event_text = "\n".join(
             f"- **{event['name']}**: "
             f"{event_time_description(event)} "
-            f"(ciclo #{event['cycle']})"
+            f"(Cycle #{event['cycle']})"
             for event in events
         )
     else:
         event_text = (
-            "No hay eventos dentro de la ventana "
-            f"de ±{EVENT_WINDOW_MINUTES} minutos."
+            "No events found within the "
+            f"±{EVENT_WINDOW_MINUTES}-minute window."
         )
 
     await message.edit(
         content=(
-            f"**Servidor:** `{job_id}`\n"
-            f"**Tiempo desde primera detección de RoValra:** "
+            f"**Server:** `{job_id}`\n"
+            f"**Time since first detected by RoValra:** "
             f"{format_age(age_seconds)}\n\n"
-            f"**Eventos cercanos estimados:**\n"
+            f"**Estimated upcoming events:**\n"
             f"{event_text}\n\n"
-            "⚠️ first_seen de RoValra no confirma la hora "
-            "real de inicio del servidor de Roblox."
+            "⚠️ RoValra's first_seen data does not confirm "
+            "the actual Roblox server creation time or "
+            "the real event start time."
         )
     )
 
 
 # ============================================================
-# COMANDO: !estado_tracker
+# COMMAND: !tracker_status
 # ============================================================
 
-@bot.command(name="estado_tracker")
-async def estado_tracker(ctx):
+@bot.command(name="tracker_status")
+async def tracker_status(ctx):
 
     active, known_ages = get_server_counts()
 
     embed = discord.Embed(
-        title="📡 Estado del tracker ASURA",
+        title="📡 ASURA Tracker Status",
         color=discord.Color.blurple(),
         timestamp=utc_now(),
     )
 
     embed.add_field(
-        name="Servidores activos registrados",
+        name="Registered Active Servers",
         value=str(active),
         inline=True,
     )
 
     embed.add_field(
-        name="Con detección registrada",
+        name="Servers with Recorded Age",
         value=str(known_ages),
         inline=True,
     )
 
     embed.add_field(
-        name="Ventana de alerta",
-        value=f"±{EVENT_WINDOW_MINUTES} minutos",
+        name="Alert Window",
+        value=f"±{EVENT_WINDOW_MINUTES} minutes",
         inline=True,
     )
 
     embed.add_field(
-        name="Ciclo RIFT",
+        name="RIFT Cycle",
         value=f"{RIFT_INTERVAL_MINUTES} min",
         inline=True,
     )
 
     embed.add_field(
-        name="Ciclo BOSS",
+        name="BOSS Cycle",
         value=f"{BOSS_INTERVAL_MINUTES} min",
         inline=True,
     )
 
     embed.add_field(
-        name="Tiempo máximo considerado",
-        value=f"{MAX_SERVER_AGE_HOURS} horas",
+        name="Maximum Server Age",
+        value=f"{MAX_SERVER_AGE_HOURS} hours",
         inline=True,
     )
 
@@ -511,22 +532,22 @@ async def estado_tracker(ctx):
         )
 
         rovalra_status = (
-            f"En pausa por rate limit "
-            f"({remaining}s restantes)"
+            f"Paused due to rate limiting "
+            f"({remaining}s remaining)"
         )
     else:
-        rovalra_status = "Sin pausa global activa"
+        rovalra_status = "No active global pause"
 
     embed.add_field(
-        name="RoValra",
+        name="RoValra Status",
         value=rovalra_status,
         inline=False,
     )
 
     embed.set_footer(
         text=(
-            "first_seen de RoValra no garantiza la edad "
-            "real ni confirma la aparición del evento."
+            "RoValra's first_seen data does not guarantee "
+            "the actual server age or confirm event appearance."
         )
     )
 
@@ -534,16 +555,16 @@ async def estado_tracker(ctx):
 
 
 # ============================================================
-# INICIO DEL BOT
+# BOT STARTUP
 # ============================================================
 
 @bot.event
 async def on_ready():
     global rift_channel, boss_channel
 
-    print(f"Conectado como {bot.user}")
+    print(f"Connected as {bot.user}")
 
-    # Cargar canal RIFT.
+    # Load the RIFT notification channel.
     try:
         rift_channel = bot.get_channel(
             RIFT_CHANNEL_ID
@@ -555,18 +576,18 @@ async def on_ready():
             )
 
         print(
-            f"[Discord] Canal RIFT: "
+            f"[Discord] RIFT channel: "
             f"#{rift_channel.name}"
         )
 
     except discord.HTTPException as error:
         rift_channel = None
         print(
-            f"[Discord] No se pudo acceder al canal RIFT: "
+            f"[Discord] Could not access the RIFT channel: "
             f"{error}"
         )
 
-    # Cargar canal BOSS.
+    # Load the BOSS notification channel.
     try:
         boss_channel = bot.get_channel(
             BOSS_CHANNEL_ID
@@ -578,21 +599,21 @@ async def on_ready():
             )
 
         print(
-            f"[Discord] Canal BOSS: "
+            f"[Discord] BOSS channel: "
             f"#{boss_channel.name}"
         )
 
     except discord.HTTPException as error:
         boss_channel = None
         print(
-            f"[Discord] No se pudo acceder al canal BOSS: "
+            f"[Discord] Could not access the BOSS channel: "
             f"{error}"
         )
 
     if rift_channel is None and boss_channel is None:
         print(
-            "[Discord] No se pudo cargar ninguno de los "
-            "canales de alertas. Revisa los IDs y permisos."
+            "[Discord] Neither notification channel could be "
+            "loaded. Check the channel IDs and bot permissions."
         )
 
     if not scan_servers.is_running():
@@ -601,21 +622,21 @@ async def on_ready():
     if not send_event_alerts.is_running():
         send_event_alerts.start()
 
-    print("Tracker ASURA iniciado.")
-    print(f"Escaneo cada {SCAN_SECONDS} segundos.")
+    print("ASURA Tracker started.")
+    print(f"Server scan interval: {SCAN_SECONDS} seconds.")
     print(
-        f"Revisión de alertas cada {REPORT_SECONDS} segundos."
+        f"Alert check interval: {REPORT_SECONDS} seconds."
     )
-    print("Fuente de antigüedad: RoValra first_seen.")
+    print("Server age source: RoValra first_seen.")
     print(
-        f"Ciclo RIFT: {RIFT_INTERVAL_MINUTES} min | "
-        f"Ciclo BOSS: {BOSS_INTERVAL_MINUTES} min"
+        f"RIFT cycle: {RIFT_INTERVAL_MINUTES} min | "
+        f"BOSS cycle: {BOSS_INTERVAL_MINUTES} min"
     )
-    print(f"Rol de alertas: {ALERT_ROLE_ID}")
+    print(f"Alert role ID: {ALERT_ROLE_ID}")
 
 
 # ============================================================
-# EJECUCIÓN
+# RUN BOT
 # ============================================================
 
 init_db()
