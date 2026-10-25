@@ -1,8 +1,8 @@
+import asyncio
 import aiohttp
 import discord
 
 from datetime import datetime, timezone
-from pathlib import Path
 from discord.ext import commands, tasks
 
 from configuracion.config import (
@@ -47,13 +47,10 @@ from apis.events import (
     event_time_description,
 )
 
-
-# ============================================================
-# PATHS
-# ============================================================
-
-BASE_DIR = Path(__file__).resolve().parent
-GIF_PATH = BASE_DIR / "gang.png"
+from diseno.alerta import (
+    build_alert_card,
+    create_server_view,
+)
 
 
 # ============================================================
@@ -111,32 +108,6 @@ rovalra = RoValraClient()
 
 rift_channel = None
 boss_channel = None
-
-
-# ============================================================
-# JOIN SERVER BUTTON
-# ============================================================
-
-def create_server_view(
-    invite_url: str,
-) -> discord.ui.View:
-
-    if not invite_url.startswith("https://roqol.io/i/"):
-        raise ValueError(
-            "The invitation is not a valid RoQoL URL."
-        )
-
-    view = discord.ui.View(timeout=None)
-
-    button = discord.ui.Button(
-        label="🎮 Join Server",
-        style=discord.ButtonStyle.link,
-        url=invite_url,
-    )
-
-    view.add_item(button)
-
-    return view
 
 
 # ============================================================
@@ -290,65 +261,51 @@ async def send_event_alerts():
                     f"{job_id}: {invite_url}"
                 )
 
-                # Create the alert embed.
-                embed = discord.Embed(
-                    title=f"⚔️ ASURA — Upcoming {event_name}",
-                    description=(
-                        f"**Server ID:** `{job_id}`\n"
-                        f"**Server Age:** "
-                        f"{format_age(age_seconds)}\n"
-                        f"**Estimated Event:** {event_name}\n"
-                        f"**Cycle:** #{cycle}\n"
-                        f"**Estimated Time:** "
-                        f"{event_time_description(event)}\n"
-                        f"**Players:** "
-                        f"{server['playing']}/{server['max']}"
-                    ),
-                    color=(
-                        discord.Color.red()
-                        if event_name == "RIFT"
-                        else discord.Color.gold()
-                    ),
-                    timestamp=utc_now(),
-                )
-
-                # Attach the local GIF to the embed.
-                embed.set_thumbnail(
-                    url="attachment://gang.png"
-                )
-
-                embed.set_footer(
-                    text=(
-                        "Event timing is estimated "
-                        "and not guaranteed."
+                # Render the alert card. Discord cannot run CSS, so
+                # the whole design (button included) is painted into
+                # a PNG that is sent on its own, without an embed.
+                try:
+                    card = await asyncio.to_thread(
+                        build_alert_card,
+                        event_name=event_name,
+                        server_id=job_id,
+                        age_seconds=age_seconds,
+                        cycle=cycle,
+                        minutes_from_target=event[
+                            "minutes_from_target"
+                        ],
+                        players=(
+                            f"{server['playing']}/"
+                            f"{server['max']}"
+                        ),
                     )
-                )
+
+                except Exception as error:
+                    print(
+                        f"[Card] Could not render {event_name} "
+                        f"for {job_id}: {error}"
+                    )
+                    continue
 
                 try:
                     view = create_server_view(
                         invite_url
                     )
 
-                    # Create a fresh file for each alert.
-                    # This prevents issues when multiple
-                    # alerts are sent during the same scan.
-                    if not GIF_PATH.is_file():
-                        print(
-                            f"[GIF] File not found: {GIF_PATH}"
-                        )
-                        continue
-
+                    # A fresh attachment per alert so several
+                    # alerts in the same scan do not collide.
                     file = discord.File(
-                        str(GIF_PATH),
-                        filename=".gang.png",
+                        card,
+                        filename=(
+                            f"asura_{event_name.lower()}.png"
+                        ),
                     )
 
-                    # Mention the alert role and send the GIF.
+                    # Mention the alert role and send the card.
                     await target_channel.send(
                         content=f"<@&{ALERT_ROLE_ID}>",
-                        embed=embed,
-                        view=view,
                         file=file,
+                        view=view,
                         allowed_mentions=discord.AllowedMentions(
                             roles=True
                         ),

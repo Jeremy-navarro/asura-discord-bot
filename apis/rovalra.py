@@ -60,6 +60,23 @@ def format_age(seconds):
     return f"{minutes} min"
 
 
+def format_age_compact(seconds):
+    """Short age used by the rendered event card."""
+
+    total_minutes = max(0, int(seconds // 60))
+
+    total_hours, minutes = divmod(total_minutes, 60)
+    days, hours = divmod(total_hours, 24)
+
+    if days:
+        return f"{days}d{hours:02d}h"
+
+    if hours:
+        return f"{hours}h{minutes:02d}m"
+
+    return f"{minutes}m"
+
+
 def age_is_stale(info):
     checked_at = parse_datetime(
         info.get("server_age_checked_at")
