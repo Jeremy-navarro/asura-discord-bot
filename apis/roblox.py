@@ -117,6 +117,7 @@ def join_server_url(
     )
 
 
+
 async def fetch_servers(session):
     """Obtiene todas las páginas de servidores públicos de Roblox."""
 
@@ -138,31 +139,49 @@ async def fetch_servers(session):
                 ROBLOX_SERVERS_API,
                 params=params,
             ) as response:
-                if response.status == 429:
+                if response.status != 200:
+                    body = (await response.text())[:300]
+
                     raise IncompleteServerScan(
-                        "Roblox respondió HTTP 429."
+                        f"Roblox HTTP {response.status}: "
+                        f"{body or 'respuesta vacía'}"
                     )
 
-                response.raise_for_status()
-                data = await response.json()
+                data = await response.json(
+                    content_type=None
+                )
 
         except IncompleteServerScan:
             raise
+
         except (
             aiohttp.ClientError,
             asyncio.TimeoutError,
             ValueError,
         ) as error:
+            detail = str(error) or repr(error)
+
             raise IncompleteServerScan(
-                f"Falló la consulta a Roblox: {error}"
+                f"Error {type(error).__name__}: {detail}"
             ) from error
 
         if not isinstance(data, dict):
             raise IncompleteServerScan(
-                "Respuesta inesperada de Roblox."
+                "Roblox devolvió una respuesta JSON inesperada."
             )
 
-        for server in data.get("data", []):
+        servers = data.get("data")
+
+        if not isinstance(servers, list):
+            raise IncompleteServerScan(
+                "La respuesta de Roblox no contiene una lista "
+                "'data' válida."
+            )
+
+        for server in servers:
+            if not isinstance(server, dict):
+                continue
+
             job_id = server.get("id")
 
             if not job_id:
