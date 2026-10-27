@@ -7,6 +7,7 @@ from configuracion.config import (
     ROBLOX_SERVERS_API,
     ROQOL_INVITE_API,
     ROQOL_AUTHORIZATION,
+    HTTP_TIMEOUT_SECONDS,
 )
 
 
@@ -37,7 +38,8 @@ async def get_roqol_invite(
         headers["authorization"] = ROQOL_AUTHORIZATION
     else:
         print(
-            "[RoQoL] Falta ROQOL_AUTHORIZATION en el archivo .env."
+            "[RoQoL] Falta ROQOL_AUTHORIZATION "
+            "en la configuración."
         )
         return None
 
@@ -57,7 +59,9 @@ async def get_roqol_invite(
                 return None
 
             try:
-                data = await response.json(content_type=None)
+                data = await response.json(
+                    content_type=None
+                )
             except (ValueError, aiohttp.ContentTypeError):
                 print("[RoQoL] Respuesta JSON no válida.")
                 return None
@@ -78,16 +82,17 @@ async def get_roqol_invite(
 
             if not isinstance(candidate, str):
                 print(
-                    f"[RoQoL] La respuesta no contiene una invitación: "
-                    f"{job_id}"
+                    "[RoQoL] La respuesta no contiene "
+                    f"una invitación: {job_id}"
                 )
                 return None
 
             candidate = candidate.strip()
+            prefix = "https://roqol.io/i/"
 
             if (
-                candidate.startswith("https://roqol.io/i/")
-                and len(candidate) > len("https://roqol.io/i/")
+                candidate.startswith(prefix)
+                and len(candidate) > len(prefix)
                 and not any(char.isspace() for char in candidate)
             ):
                 print(
@@ -96,12 +101,23 @@ async def get_roqol_invite(
                 return candidate
 
             print(
-                f"[RoQoL] El enlace recibido no es válido para {job_id}."
+                f"[RoQoL] El enlace recibido no es válido "
+                f"para {job_id}."
             )
             return None
 
-    except (aiohttp.ClientError, asyncio.TimeoutError) as error:
-        print(f"[RoQoL] Error de conexión: {error}")
+    except asyncio.TimeoutError:
+        print(
+            f"[RoQoL] Timeout al solicitar invitación "
+            f"para {job_id}."
+        )
+        return None
+
+    except aiohttp.ClientError as error:
+        print(
+            f"[RoQoL] Error de conexión: "
+            f"{type(error).__name__}: {error!r}"
+        )
         return None
 
 
@@ -109,7 +125,7 @@ def join_server_url(
     job_id: str,
     place_id: int = PLACE_ID,
 ) -> str:
-    """Construye el enlace directo de Roblox como alternativa."""
+    """Construye un enlace directo al servidor de Roblox."""
 
     return (
         "https://www.roblox.com/games/start"
@@ -117,15 +133,17 @@ def join_server_url(
     )
 
 
-
 async def fetch_servers(session):
-    """Obtiene todas las páginas de servidores públicos de Roblox."""
+    """Obtiene todas las páginas de servidores públicos."""
 
     found = {}
     cursor = None
     seen_cursors = set()
+    page_number = 0
 
     while True:
+        page_number += 1
+
         params = {
             "sortOrder": "Asc",
             "limit": 100,
@@ -135,15 +153,21 @@ async def fetch_servers(session):
             params["cursor"] = cursor
 
         try:
+            print(
+                f"[Roblox] Consultando página {page_number}..."
+            )
+
             async with session.get(
                 ROBLOX_SERVERS_API,
                 params=params,
             ) as response:
+
                 if response.status != 200:
                     body = (await response.text())[:300]
 
                     raise IncompleteServerScan(
-                        f"Roblox HTTP {response.status}: "
+                        f"Roblox HTTP {response.status} "
+                        f"en página {page_number}: "
                         f"{body or 'respuesta vacía'}"
                     )
 
@@ -154,28 +178,30 @@ async def fetch_servers(session):
         except IncompleteServerScan:
             raise
 
-        except (
-            aiohttp.ClientError,
-            asyncio.TimeoutError,
-            ValueError,
-        ) as error:
-            detail = str(error) or repr(error)
-
+        except asyncio.TimeoutError as error:
             raise IncompleteServerScan(
-                f"Error {type(error).__name__}: {detail}"
+                f"Timeout en página {page_number}; "
+                f"límite configurado: "
+                f"{HTTP_TIMEOUT_SECONDS} segundos."
+            ) from error
+
+        except (aiohttp.ClientError, ValueError) as error:
+            raise IncompleteServerScan(
+                f"{type(error).__name__} en página "
+                f"{page_number}: {error!r}"
             ) from error
 
         if not isinstance(data, dict):
             raise IncompleteServerScan(
-                "Roblox devolvió una respuesta JSON inesperada."
+                f"Respuesta inesperada en página {page_number}."
             )
 
         servers = data.get("data")
 
         if not isinstance(servers, list):
             raise IncompleteServerScan(
-                "La respuesta de Roblox no contiene una lista "
-                "'data' válida."
+                f"Falta la lista de servidores en "
+                f"página {page_number}."
             )
 
         for server in servers:
@@ -192,6 +218,12 @@ async def fetch_servers(session):
                 "max": server.get("maxPlayers", 0),
             }
 
+        print(
+            f"[Roblox] Página {page_number}: "
+            f"{len(servers)} servidores; "
+            f"{len(found)} acumulados."
+        )
+
         next_cursor = data.get("nextPageCursor")
 
         if not next_cursor:
@@ -204,5 +236,11 @@ async def fetch_servers(session):
 
         seen_cursors.add(next_cursor)
         cursor = next_cursor
+
+    print(
+        f"[Roblox] Escaneo completado: "
+        f"{len(found)} servidores en "
+        f"{page_number} páginas."
+    )
 
     return found
