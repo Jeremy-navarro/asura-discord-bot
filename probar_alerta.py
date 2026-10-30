@@ -31,6 +31,8 @@ from diseno.alerta import (
     create_server_view,
 )
 
+from apis.roblox import join_server_url
+
 
 CHANNELS = {
     "RIFT": RIFT_CHANNEL_ID,
@@ -103,8 +105,11 @@ def parse_args():
 
     parser.add_argument(
         "--invitacion",
-        default="https://roqol.io/i/prueba",
-        help="URL de la invitacion del boton.",
+        default=None,
+        help=(
+            "URL del boton. Por defecto se genera el enlace "
+            "directo de Roblox para --servidor."
+        ),
     )
 
     parser.add_argument(
@@ -196,6 +201,10 @@ async def enviar(card, args, canal):
 
 def main():
     args = parse_args()
+
+    if not args.invitacion:
+        args.invitacion = join_server_url(args.servidor)
+
     canal = args.canal or CHANNELS[args.evento]
 
     card = render(args)

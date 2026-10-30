@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+
+  <title>ASURA · Join Server</title>
+
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --cyan: #00f2ea;
+      --purple: #a855f7;
+      --text: #e8fdfc;
+      --muted: #7b8f8e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(168,85,247,.16), transparent 55%),
+        radial-gradient(circle at 0% 100%, rgba(0,242,234,.12), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: Consolas, monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 460px;
+      border: 2px solid rgba(0,242,234,.55);
+      background: rgba(0,242,234,.03);
+      box-shadow: 0 0 42px rgba(0,242,234,.18);
+      padding: 34px 28px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 42px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      color: var(--cyan);
+      font-size: 21px;
+      letter-spacing: .2em;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 11px;
+      word-break: break-all;
+      margin-bottom: 26px;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 18px 12px;
+      border: 2px solid var(--cyan);
+      background: rgba(0,242,234,.06);
+      color: var(--cyan);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: bold;
+      letter-spacing: .12em;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn:hover {
+      background: rgba(0,242,234,.15);
+      box-shadow: 0 0 24px rgba(0,242,234,.3);
+    }
+
+    .secondary {
+      margin-top: 12px;
+      border-color: var(--purple);
+      color: var(--purple);
+      font-size: 11px;
+    }
+
+    .status {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .error {
+      color: #ff6b81;
+    }
+  </style>
+</head>
+
+<body>
+
+<main class="card">
+
+  <div class="logo">🎮</div>
+
+  <h1 id="title">ASURA SERVER</h1>
+
+  <p class="sub" id="server">
+    Preparing server connection...
+  </p>
+
+  <a class="btn" id="open" href="#">
+    JOIN EXACT SERVER
+  </a>
+
+  <a class="btn secondary" id="fallback" href="#">
+    OPEN WITH ROBLOX WEBSITE
+  </a>
+
+  <p class="status" id="status">
+    Select JOIN EXACT SERVER to open Roblox.
+  </p>
+
+</main>
+
+<script>
+
+  // ASURA GAME PLACE ID
+  const PLACE_ID = 13358463560;
+
+  // Roblox Job ID format
+  const UUID =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  const titleEl = document.getElementById("title");
+  const serverEl = document.getElementById("server");
+  const openEl = document.getElementById("open");
+  const fallbackEl = document.getElementById("fallback");
+  const statusEl = document.getElementById("status");
+
+  function fail(message) {
+    titleEl.textContent = "INVALID SERVER";
+    serverEl.textContent = "ASURA";
+    openEl.style.display = "none";
+    fallbackEl.style.display = "none";
+    statusEl.textContent = message;
+    statusEl.classList.add("error");
+  }
+
+  // Extract Job ID from /join/JOB_ID
+  const path = window.location.pathname
+    .replace(/\/+$/, "");
+
+  let jobId = "";
+
+  const segments = path.split("/").filter(Boolean);
+
+  if (segments.length >= 2 && segments[0] === "join") {
+    jobId = segments[1];
+  }
+
+  // Alternative: ?server=JOB_ID
+  if (!jobId) {
+    jobId =
+      new URLSearchParams(window.location.search)
+        .get("server") || "";
+  }
+
+  if (!UUID.test(jobId)) {
+
+    fail(
+      "Invalid server ID. Please use the Join Server button from Discord."
+    );
+
+  } else {
+
+    // Preserve the exact Job ID.
+    serverEl.textContent = "SERVER ID: " + jobId;
+
+    const params = new URLSearchParams({
+      placeId: String(PLACE_ID),
+      gameInstanceId: jobId
+    });
+
+    // Direct Roblox application link.
+    const deepLink =
+      "roblox://experiences/start?" + params.toString();
+
+    // Official website fallback.
+    const webLink =
+      "https://www.roblox.com/games/start?" + params.toString();
+
+    openEl.href = deepLink;
+    fallbackEl.href = webLink;
+
+    openEl.addEventListener("click", function() {
+      statusEl.textContent =
+        "Opening Roblox and requesting server " + jobId;
+    });
+
+    fallbackEl.addEventListener("click", function() {
+      statusEl.textContent =
+        "Opening the official Roblox launcher.";
+    });
+
+    console.log("ASURA JOIN SYSTEM");
+    console.log("PLACE ID:", PLACE_ID);
+    console.log("JOB ID:", jobId);
+    console.log("DEEP LINK:", deepLink);
+    console.log("WEB LINK:", webLink);
+
+  }
+
+</script>
+
+</body>
+</html>

@@ -36,15 +36,17 @@ ROVALRA_BASE_URL = "https://apis.rovalra.com"
 ROVALRA_PROCESS_URL = f"{ROVALRA_BASE_URL}/process_servers"
 ROVALRA_DETAILS_URL = f"{ROVALRA_BASE_URL}/v1/server_details"
 
-# RoQoL
-ROQOL_INVITE_API = "https://roqol.io/api/servers/invite"
-ROQOL_AUTHORIZATION = os.getenv("ROQOL_AUTHORIZATION", "").strip()
-
 # Roblox
 ROBLOX_SERVERS_API = (
     f"https://games.roblox.com/v1/games/"
     f"{PLACE_ID}/servers/Public"
 )
+
+# Invitaciones
+# Base de tu redirector propio, por ejemplo:
+#   https://asura.netlify.app/join
+# Si se deja vacio se usa el enlace oficial de roblox.com.
+INVITE_BASE_URL = os.getenv("INVITE_BASE_URL", "").strip().rstrip("/")
 
 # Base de datos existente
 DATABASE = "asura_servers.db"

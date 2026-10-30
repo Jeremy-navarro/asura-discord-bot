@@ -32,7 +32,7 @@ from configuracion.database import (
 
 from apis.roblox import (
     fetch_servers,
-    get_roqol_invite,
+    join_server_url,
     IncompleteServerScan,
 )
 
@@ -235,35 +235,27 @@ async def send_event_alerts():
                 ):
                     continue
 
-                # Obtain the RoQoL invitation.
+                # Link to this exact server: our own redirector if
+                # configured (roblox:// deep link), otherwise the
+                # official roblox.com launcher.
                 try:
-                    invite_url = await get_roqol_invite(
-                        bot.http_session,
-                        job_id,
-                    )
+                    invite_url = join_server_url(job_id)
 
-                except Exception as error:
+                except ValueError as error:
                     print(
-                        f"[RoQoL] Failed to generate an "
-                        f"invitation for {job_id}: {error}"
-                    )
-                    continue
-
-                if not invite_url:
-                    print(
-                        f"[RoQoL] No invitation obtained for "
-                        f"{job_id}. Retrying on the next check."
+                        f"[Roblox] Invalid server id "
+                        f"{job_id}: {error}"
                     )
                     continue
 
                 print(
-                    f"[RoQoL] Invitation obtained for "
+                    f"[Roblox] Server link for "
                     f"{job_id}: {invite_url}"
                 )
 
                 # Render the alert card. Discord cannot run CSS, so
-                # the whole design (button included) is painted into
-                # a PNG that is sent on its own, without an embed.
+                # the whole design is painted into a PNG that is
+                # sent on its own, without an embed.
                 try:
                     card = await asyncio.to_thread(
                         build_alert_card,
