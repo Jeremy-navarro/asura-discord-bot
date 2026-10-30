@@ -1,0 +1,6 @@
+# Netlify / Cloudflare Pages
+# Any /join/<jobId> serves index.html; the JS reads the ID.
+/join/*  /index.html  200
+
+# Root: same page (shows the invalid-link notice).
+/  /index.html  200

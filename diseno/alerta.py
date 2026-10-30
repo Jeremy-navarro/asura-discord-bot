@@ -22,9 +22,12 @@ DISCLAIMER = "Event timing is estimated and not guaranteed."
 def create_server_view(invite_url):
     """Link button sent under the card."""
 
-    if not invite_url.startswith("https://roqol.io/i/"):
+    if (
+        not invite_url.startswith("https://")
+        or any(char.isspace() for char in invite_url)
+    ):
         raise ValueError(
-            "The invitation is not a valid RoQoL URL."
+            "The invitation is not a valid https link."
         )
 
     view = discord.ui.View(timeout=None)
